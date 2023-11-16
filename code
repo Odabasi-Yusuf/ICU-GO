@@ -1,0 +1,216 @@
+library(clusterProfiler)
+library(enrichplot)
+library(ggplot2)
+organism = "org.Hs.eg.db"
+library(organism, character.only = TRUE)
+library(stringr)
+
+# reading in data from deseq2
+df = read.csv("Organoids.csv", header=TRUE, sep = ";")
+df_org_pro <- df[,c(2,4,7)]
+df_org_mid <- df[,c(2,6,7)]
+# we want the log2 fold change 
+original_gene_list <- df_org_pro$Log2.fold.change..propofol.
+original_gene_list <- str_replace_all(original_gene_list, ",", ".")
+original_gene_list <- as.numeric(original_gene_list)
+
+original_gene_list1 <- df_org_mid$Log2.fold.change..midazolam.
+original_gene_list1 <- str_replace_all(original_gene_list1, ",", ".")
+original_gene_list1 <- as.numeric(original_gene_list1)
+# name the vector
+names(original_gene_list) <- df_org_pro$Symbol
+names(original_gene_list1) <- df_org_mid$Symbol
+# omit any NA values 
+gene_list<-na.omit(original_gene_list)
+gene_list1<-na.omit(original_gene_list1)
+# sort the list in decreasing order (required for clusterProfiler)
+gene_list = sort(gene_list, decreasing = TRUE)
+gene_list1 = sort(gene_list1, decreasing = TRUE)
+
+gse <- gseGO(geneList=gene_list, 
+             ont ="ALL", 
+             keyType = "SYMBOL", 
+             #nPerm = 10000, 
+             minGSSize = 3, 
+             maxGSSize = 800, 
+             pvalueCutoff = 0.05, 
+             verbose = TRUE, 
+             OrgDb = org.Hs.eg.db, 
+             pAdjustMethod = "none")
+
+gse1 <- gseGO(geneList=gene_list1, 
+             ont ="ALL", 
+             keyType = "SYMBOL", 
+             #nPerm = 10000, 
+             minGSSize = 3, 
+             maxGSSize = 800, 
+             pvalueCutoff = 0.05, 
+             verbose = TRUE, 
+             OrgDb = org.Hs.eg.db, 
+             pAdjustMethod = "none")
+
+
+require(DOSE)
+p1 <- dotplot(gse, showCategory=9, split=".sign", font.size = 7.5, label_format = 24) + facet_grid(.~.sign)
+gse<-pairwise_termsim(gse)
+#p2 <- emapplot(gse, showCategory = 9)
+cex.params = list(category_label = 0.6, gene_label = 0.4)
+p3 <- cnetplot(gse, categorySize="pvalue", foldChange=gene_list, showCategory = p1$data$Description, circular=T, colorEdge=T, cex.params=cex.params)
+p4 <- ridgeplot(gse, showCategory = p1$data$Description, label_format =28) + labs(x = "enrichment distribution")
+
+p11 <- dotplot(gse1, showCategory=12, split=".sign", font.size = 7.5, label_format = 30) + facet_grid(.~.sign)
+gse1<-pairwise_termsim(gse1)
+p22 <- emapplot(gse1, showCategory = 9)
+p33 <- cnetplot(gse1, categorySize="pvalue", foldChange=gene_list1, circular = TRUE, colorEdge = TRUE, 
+                showCategory = p11$data$Description, cex.params=cex.params)
+p44 <- ridgeplot(gse1, showCategory = p11$data$Description, label_format =28) + labs(x = "enrichment distribution")
+#gseaplot(gse, by = "all", title = gse$Description[2], geneSetID = 9)
+#ids = bitr(names(original_gene_list), fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db)
+#dedup_ids = ids[!duplicated(ids[c("SYMBOL")]),]
+#df2 = df_org_pro[df_org_pro$Symbol %in% dedup_ids$SYMBOL,]
+#df2$Y = dedup_ids$ENTREZID
+kegg_gene_list <- df_org_pro$Log2.fold.change..propofol.
+kegg_gene_list <- str_replace_all(kegg_gene_list, ",", ".")
+kegg_gene_list <- as.numeric(kegg_gene_list)
+names(kegg_gene_list) <- df_org_pro$NCBI_ID
+kegg_gene_list<-na.omit(kegg_gene_list)
+kegg_gene_list = sort(kegg_gene_list, decreasing = TRUE)
+
+
+kegg_gene_list1 <- df_org_mid$Log2.fold.change..midazolam.
+kegg_gene_list1 <- str_replace_all(kegg_gene_list1, ",", ".")
+kegg_gene_list1 <- as.numeric(kegg_gene_list1)
+names(kegg_gene_list1) <- df_org_mid$NCBI_ID
+kegg_gene_list1 <- na.omit(kegg_gene_list1)
+kegg_gene_list1 = sort(kegg_gene_list1, decreasing = TRUE)
+
+kk22 = gseKEGG(geneList     = kegg_gene_list1,
+              organism     = "hsa",
+              minGSSize    = 3,
+              maxGSSize    = 800,
+              pvalueCutoff = 1,
+              pAdjustMethod = "none",
+              keyType       = "ncbi-geneid")
+
+p55 <- dotplot(kk22, showCategory = 10, title = "Enriched Pathways" , split=".sign") + facet_grid(.~.sign)
+kk22 <- pairwise_termsim(kk22)
+#emapplot(kk2)
+p6 <- cnetplot(kk2, categorySize="pvalue", foldChange=kegg_gene_list, showCategory = p5$data$Description,
+               circular =TRUE, colorEdge = TRUE, cex.params = cex.params)
+p77 <- ridgeplot(kk22, showCategory = p55$data$Description, label_format = 41) + labs(x = "enrichment distribution")
+
+#BiocManager::install("pathview")
+library(pathview)
+dme <- pathview(gene.data=kegg_gene_list, pathway.id="hsa04217", species = "hsa")
+knitr::include_graphics("hsa04217.pathview.png")
+
+library(pathview)
+dmee <- pathview(gene.data=kegg_gene_list, pathway.id="hsa05033", species = "hsa")
+knitr::include_graphics("hsa04217.pathview.png")
+
+
+#####################################################################################################
+#####################################################################################################
+
+# reading in data from deseq2
+dff = read.csv("Mastt.csv", header=TRUE, sep = ";")
+df_mast_pro <- dff[-15,c(2,3,5)]
+df_mast_mid <- dff[-15,c(2,4,5)]
+# we want the log2 fold change 
+original_gene_listt <- df_mast_pro$PRO_Log2.fold.change
+original_gene_listt <- str_replace_all(original_gene_listt, ",", ".")
+original_gene_listt <- as.numeric(original_gene_listt)
+
+original_gene_listt1 <- df_mast_mid$MID_Log2.fold.change
+original_gene_listt1 <- str_replace_all(original_gene_listt1, ",", ".")
+original_gene_listt1 <- as.numeric(original_gene_listt1)
+# name the vector
+names(original_gene_listt) <- df_mast_pro$Symbol
+names(original_gene_listt1) <- df_mast_mid$Symbol
+# omit any NA values 
+gene_listt<-na.omit(original_gene_listt)
+gene_listt1<-na.omit(original_gene_listt1)
+# sort the list in decreasing order (required for clusterProfiler)
+gene_listt = sort(gene_listt, decreasing = TRUE)
+gene_listt1 = sort(gene_listt1, decreasing = TRUE)
+
+gsee <- gseGO(geneList=gene_listt, 
+             ont ="ALL", 
+             keyType = "SYMBOL", 
+             #nPerm = 10000, 
+             minGSSize = 3, 
+             maxGSSize = 800, 
+             pvalueCutoff = 0.05, 
+             verbose = TRUE, 
+             OrgDb = org.Hs.eg.db, 
+             pAdjustMethod = "none")
+
+gsee1 <- gseGO(geneList=gene_listt1, 
+              ont ="ALL", 
+              keyType = "SYMBOL", 
+              #nPerm = 10000, 
+              minGSSize = 3, 
+              maxGSSize = 800, 
+              pvalueCutoff = 0.05, 
+              verbose = TRUE, 
+              OrgDb = org.Hs.eg.db, 
+              pAdjustMethod = "none")
+
+
+require(DOSE)
+pp1 <- dotplot(gsee, showCategory=10, split=".sign", font.size = 7.5, label_format = 24) + facet_grid(.~.sign)
+gsee<-pairwise_termsim(gsee)
+pp2 <- emapplot(gsee, showCategory = 8)
+pp3 <- cnetplot(gsee, categorySize="pvalue", foldChange=gene_listt, showCategory = pp1$data$Description,
+                circular = TRUE, colorEdge = TRUE, cex.params = cex.params)
+pp4 <- ridgeplot(gsee, showCategory = pp1$data$Description, label_format =35) + labs(x = "enrichment distribution")
+
+pp11 <- dotplot(gsee1, showCategory=10, split=".sign", font.size = 7, label_format = 36) + facet_grid(.~.sign)
+gsee1<-pairwise_termsim(gsee1)
+#pp22 <- emapplot(gsee1, showCategory = 9)
+pp33 <- cnetplot(gsee1, categorySize="pvalue", foldChange=gene_listt1, circular = TRUE,
+                 colorEdge = TRUE, showCategory = pp11$data$Description, cex.params = cex.params)
+pp44 <- ridgeplot(gsee1, showCategory = pp11$data$Description, label_format =50) + labs(x = "enrichment distribution")
+#gseaplot(gse, by = "all", title = gse$Description[2], geneSetID = 9)
+#ids = bitr(names(original_gene_list), fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db)
+#dedup_ids = ids[!duplicated(ids[c("SYMBOL")]),]
+#df2 = df_org_pro[df_org_pro$Symbol %in% dedup_ids$SYMBOL,]
+#df2$Y = dedup_ids$ENTREZID
+kegg_gene_listt <- df_mast_pro$PRO_Log2.fold.change
+kegg_gene_listt <- str_replace_all(kegg_gene_listt, ",", ".")
+kegg_gene_listt <- as.numeric(kegg_gene_listt)
+names(kegg_gene_listt) <- df_mast_pro$NCBI_ID
+kegg_gene_listt<-na.omit(kegg_gene_listt)
+kegg_gene_listt = sort(kegg_gene_listt, decreasing = TRUE)
+
+
+kegg_gene_listt1 <- df_mast_mid$MID_Log2.fold.change
+kegg_gene_listt1 <- str_replace_all(kegg_gene_listt1, ",", ".")
+kegg_gene_listt1 <- as.numeric(kegg_gene_listt1)
+names(kegg_gene_listt1) <- df_mast_mid$NCBI_ID
+kegg_gene_listt1 <- na.omit(kegg_gene_listt1)
+kegg_gene_listt1 = sort(kegg_gene_listt1, decreasing = TRUE)
+
+kkk22 = gseKEGG(geneList     = kegg_gene_listt1,
+               organism     = "hsa",
+               minGSSize    = 3,
+               maxGSSize    = 800,
+               pvalueCutoff = 1,
+               pAdjustMethod = "none",
+               keyType       = "ncbi-geneid")
+
+pp55 <- dotplot(kkk22, showCategory = 10, title = "Enriched Pathways" , split=".sign") + facet_grid(.~.sign)
+kkk22 <- pairwise_termsim(kkk22)
+#emapplot(kk2)
+pp66 <- cnetplot(kkk22, categorySize="pvalue", foldChange=kegg_gene_listt1, showCategory = pp55$data$Description,
+                 circular =TRUE, colorEdge = TRUE, cex.params =cex.params)
+pp7 <- ridgeplot(kkk2, showCategory = pp5$data$Description, label_format = 35) + labs(x = "enrichment distribution")
+
+#BiocManager::install("pathview")
+library(pathview)
+dme <- pathview(gene.data=kegg_gene_listt, pathway.id=c("hsa04064","hsa05166"), species = "hsa")
+knitr::include_graphics(c("hsa04064.pathview.png", "hsa05166.pathview.png"))
+
+library(pathview)
+dmee <- pathview(gene.data=kegg_gene_listt1, pathway.id="hsa04217", species = "hsa")
+knitr::include_graphics("hsa04217.pathview.png")
